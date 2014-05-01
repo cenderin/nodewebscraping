@@ -1,36 +1,45 @@
-var express = require('express');
-var fs = require('fs');
-var request = require('request');
-var cheerio = require('cheerio');
-var app     = express();
-app.set('view engine', 'ejs');
+var http = require("http"); 
+var cheerio = require("cheerio"); 
 
-app.get('/scrape', function(req, res){
-	url = 'http://www.imdb.com/title/tt1229340/';
-	request(url, function(error, response, html){
-		if(!error){
-			var $ = cheerio.load(html);
-			var title, release, rating;
-			var json = { title : "", release : "", rating : ""};
-			$('.header').filter(function(){
-			var data = $(this);
-			title = data.children().first().text();            
-			release = data.children().last().children().text();
-			json.title = title;
-			json.release = release;
-	       })
-            $('.star-box-giga-star').filter(function(){
-	        	var data = $(this);
-	        	rating = data.text();
-	        	json.rating = rating;
-	        })
-		}
-       	fs.writeFile('output.json', JSON.stringify(json, null, 4), function(err){
-        	console.log('File successfully written! - Check your project directory for the output.json file');
-        })
+var server = http.createServer(function(req, res){
+
+	var req_opts = {
+		host:"en.wikipedia.org",
+		path:"/wiki/London"
+	};
+	var response_text = " ";
+
+	var request = http.request(req_opts, function(resp) {
+		if(resp.statusCode != 200) {
+			throw "Error: " + resp.statusCode;
+		};
+		resp.setEncoding("utf8"); 
+		resp.on("data", function (chunk) { 
+			response_text += chunk; 
+		});
+		resp.on("end", function(){
+
+
+		$ = cheerio.load(response_text);
+
+		res.writeHead(200, {"Content-Type": "text/html"}); 
+		res.write("<html><head><meta charset='UTF-8' />"); 
+		res.write("</head><body><table>"); 
+		$("table.geography tr").each(function(tr_index, tr) {
+		 var th_text = $(this).find("th").text(); 
+		 var prop_name = th_text.trim().toLowerCase().replace(/[^a-z]/g,""); 
+		 	if({"country":1, "mayor":1, "elevation":1}[prop_name])
+		 	{
+		 		res.write("<tr><th>" + prop_name + "</th><td>"); 
+		 		res.write($(this).find("td").text()); 
+		 		res.write("</td></tr>"); 
+		 	}
+		});
+		res.end("</table></body></html>");
 	})
-	res.redirect('http://www.google.com')
 })
-app.listen('8081')
-console.log('Magic happens on port 8081');
-exports = module.exports = app;
+	request.on("error", function(e){
+		throw "Error: " + e.message;
+	});
+	request.end();
+}).listen(8080);
